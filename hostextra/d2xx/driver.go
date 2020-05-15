@@ -19,6 +19,31 @@ import (
 	"periph.io/x/periph/conn/spi/spireg"
 )
 
+// @TSS@JH@ add filtering to access only specific devices
+func FilterDeviceType(t ftdi.DevType) *ftdi.DevType {
+	return &t
+}
+func FilterVenID(u uint16) *uint16 {
+	return &u
+}
+func FilterDevID(u uint16) *uint16 {
+	return &u
+}
+func FilterDeviceIdx(i int) *int {
+	return &i
+}
+
+// filter values = nil means allow every value
+type Filter struct {
+	Type      *ftdi.DevType
+	VenID     *uint16
+	DevID     *uint16
+	DeviceIdx *int // -1 = use first available device matching this filter or the matching filter index deviceIdx
+	deviceCnt int  // count devices matching this filter (Type/VenID/DevID)
+}
+
+var DeviceFilter []Filter
+
 // All enumerates all the connected FTDI devices.
 func All() []Dev {
 	drv.mu.Lock()
@@ -38,6 +63,14 @@ func open(opener func(i int) (d2xxHandle, int), i int) (Dev, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !matchFilter(h) {
+		name := "no match filter for device(" + strconv.Itoa(i) + "): type " + h.t.String() +
+			" vendor: 0x" + strconv.FormatUint(uint64(h.venID), 16) +
+			" device id: 0x" + strconv.FormatUint(uint64(h.devID), 16)
+		h.closeDev()
+		return &broken{index: i, err: nil, name: name}, nil
+	}
+
 	if err := h.setupCommon(); err != nil {
 		// setupCommon() takes the device in its previous state. It could be in an
 		// unexpected state, so try resetting it first.
@@ -77,6 +110,42 @@ func open(opener func(i int) (d2xxHandle, int), i int) (Dev, error) {
 	default:
 		return &g, nil
 	}
+}
+
+func matchFilterEntry(d *device, f *Filter) (match bool) {
+	if f.Type != nil && *f.Type != d.t {
+		return
+	}
+	if f.VenID != nil && *f.VenID != d.venID {
+		return
+	}
+	if f.DevID != nil && *f.DevID != d.devID {
+		return
+	}
+	if f.DeviceIdx != nil {
+		if *f.DeviceIdx == -1 {
+			// -1 = use only first device found...
+			match = f.deviceCnt == 0
+		} else {
+			match = f.deviceCnt == *f.DeviceIdx
+		}
+	} else {
+		match = true
+	}
+	f.deviceCnt++
+	return
+}
+
+func matchFilter(d *device) bool {
+	if len(DeviceFilter) == 0 {
+		return true
+	}
+	for idx := range DeviceFilter {
+		if matchFilterEntry(d, &DeviceFilter[idx]) {
+			return true
+		}
+	}
+	return false
 }
 
 // registerDev registers the header and supported buses and ports in the
@@ -149,6 +218,9 @@ func (d *driver) After() []string {
 }
 
 func (d *driver) Init() (bool, error) {
+	for idx := range DeviceFilter {
+		DeviceFilter[idx].deviceCnt = 0
+	}
 	num, err := d.numDevices()
 	if err != nil {
 		return true, err
