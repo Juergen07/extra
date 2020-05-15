@@ -77,9 +77,11 @@ type device struct {
 	devID uint16
 }
 
-func (d *device) closeDev() error {
-	// Not yet called.
-	return toErr("Close", d.h.d2xxClose())
+func (d *device) closeDev() (err error) {
+	err = toErr("Close", d.h.d2xxClose())
+	// @TSS@JH@ avoid access after close
+	d.h = nil
+	return
 }
 
 // setupCommon is the general setup for common devices.
@@ -348,6 +350,29 @@ func (d *device) setBaudRate(hz int64) error {
 		return errors.New("d2xx: baud rate too high")
 	}
 	return toErr("SetBaudRate", d.h.d2xxSetBaudRate(uint32(hz)))
+}
+
+// @TSS@JH@ add ReInit, e.g. if device was reconnected
+func (d *device) ReOpen(index int) error {
+	d.closeDev()
+	dptr, err := openDev(drv.d2xxOpen, index)
+	if err != nil {
+		return err
+	}
+	if dptr.t != d.t {
+		return errors.New("Reinit: failed - type changed: " + d.t.String() + " -> " + dptr.t.String())
+	}
+	*d = *dptr
+	if err := d.setupCommon(); err != nil {
+		d.closeDev()
+		return err
+	}
+	if err := d.setupMPSSE(); err != nil {
+		d.closeDev()
+		return err
+	}
+
+	return err
 }
 
 //

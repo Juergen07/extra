@@ -73,6 +73,8 @@ type Dev interface {
 	//
 	// If the length of ua is less than the available space, is it zero extended.
 	WriteUserArea(ua []byte) error
+	// ReOpen in case device was reconnected
+	ReOpen() error
 }
 
 // broken represents a device that couldn't be opened correctly.
@@ -121,6 +123,10 @@ func (b *broken) UserArea() ([]byte, error) {
 }
 
 func (b *broken) WriteUserArea(ua []byte) error {
+	return b.err
+}
+
+func (b *broken) ReOpen() error {
 	return b.err
 }
 
@@ -201,6 +207,10 @@ func (f *generic) UserArea() ([]byte, error) {
 
 func (f *generic) WriteUserArea(ua []byte) error {
 	return f.h.writeUA(ua)
+}
+
+func (f *generic) ReOpen() error {
+	return f.h.ReOpen(f.index)
 }
 
 //
