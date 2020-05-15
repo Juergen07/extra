@@ -114,6 +114,13 @@ func (d *device) setupCommon() error {
 	if e := d.h.d2xxSetFlowControl(); e != 0 {
 		return toErr("SetFlowControl", e)
 	}
+	// @TSS@JH@ use reset mode according FTDI AN to avoid sporadic issues with setupMPSSE
+	if err := d.setBitMode(0, bitModeReset); err != nil {
+		return err
+	}
+	if err := d.setBitMode(0, bitModeMpsse); err != nil {
+		return err
+	}
 	// Just in case. It's a very small cost.
 	return d.flushPending()
 }
