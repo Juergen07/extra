@@ -24,13 +24,14 @@ func TestDriver(t *testing.T) {
 			d:    ftdi.FT232R,
 			vid:  0x0403,
 			pid:  0x6014,
-			data: [][]byte{{}, {0}},
+			data: [][]byte{{}, {0xFA, 0xAA}, {0xFA, 0xAB}},
 		}
 		return d, 0
 	}
 	if b, err := drv.Init(); !b || err != nil {
 		t.Fatalf("Init() = %t, %v", b, err)
 	}
+	assert.Nil(t, All()[0].ReOpen())
 }
 
 //
@@ -146,7 +147,7 @@ func (d *d2xxFakeHandle) d2xxRead(b []byte) (int, int) {
 }
 func (d *d2xxFakeHandle) d2xxWrite(b []byte) (int, int) {
 	d.touched = true
-	return 0, 0
+	return len(b), 0
 }
 func (d *d2xxFakeHandle) d2xxGetBitMode() (byte, int) {
 	d.touched = true
@@ -176,7 +177,7 @@ var dev = []d2xxFakeHandle{
 		d:    ftdi.FT232R,
 		vid:  0x0403,
 		pid:  0x6001,
-		data: [][]byte{{}, {0}},
+		data: [][]byte{{}, {0}, {}, {0xFA, 0xAA}, {0xFA, 0xAB}},
 	},
 	{
 		d:    ftdi.FT232R,
@@ -214,6 +215,10 @@ func TestFilter1(t *testing.T) {
 	assert.True(t, dev[1].touched)
 	assert.Contains(t, all[2].String(), "no match filter")
 	assert.False(t, dev[2].touched)
+
+	assert.Nil(t, all[0].ReOpen())
+	assert.Nil(t, all[1].ReOpen())
+	assert.Nil(t, all[2].ReOpen())
 }
 
 func TestFilter2(t *testing.T) {
@@ -245,4 +250,7 @@ func TestFilter2(t *testing.T) {
 	assert.False(t, dev[1].touched)
 	assert.Equal(t, all[2].String(), "FT232R(2)")
 	assert.True(t, dev[2].touched)
+
+	assert.Nil(t, all[0].ReOpen())
+	assert.Contains(t, all[2].ReOpen().Error(), "device changed")
 }

@@ -359,8 +359,8 @@ func (d *device) ReOpen(index int) error {
 	if err != nil {
 		return err
 	}
-	if dptr.t != d.t {
-		return errors.New("Reinit: failed - type changed: " + d.t.String() + " -> " + dptr.t.String())
+	if dptr.t != d.t || dptr.venID != d.venID || dptr.devID != d.devID {
+		return fmt.Errorf("func ReOpen: failed - device changed: %v -> %v", d, dptr)
 	}
 	*d = *dptr
 	if err := d.setupCommon(); err != nil {
